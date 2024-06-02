@@ -1,10 +1,8 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import QThreadPool
-from pytube import YouTube
+from pytube import YouTube, Playlist
 import sys
 import time
-
-
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -74,7 +72,6 @@ class Ui_MainWindow(object):
 "QPushButton:hover {\n"
 "    background-color: #e81c30;\n"
 "}")
-
         self.browseButton.setObjectName("browseButton")
         self.downloadButton = QtWidgets.QPushButton(self.centralwidget)
         self.downloadButton.setGeometry(QtCore.QRect(400, 450, 331, 71))
@@ -95,8 +92,6 @@ class Ui_MainWindow(object):
 "QPushButton:hover {\n"
 "    background-color: #1475ba;\n"
 "}")
-
-
         self.completeLabel = QtWidgets.QLabel(self.centralwidget)
         self.completeLabel.setGeometry(QtCore.QRect(340, 360, 471, 61))
         font = QtGui.QFont()
@@ -108,8 +103,6 @@ class Ui_MainWindow(object):
 "}")
         self.completeLabel.setAlignment(QtCore.Qt.AlignCenter)
         self.completeLabel.setObjectName("completeLabel")
-
-
         self.downloadButton.setObjectName("downloadButton")
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
@@ -119,7 +112,6 @@ class Ui_MainWindow(object):
         self.statusbar = QtWidgets.QStatusBar(MainWindow)
         self.statusbar.setObjectName("statusbar")
         MainWindow.setStatusBar(self.statusbar)
-
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
@@ -135,39 +127,50 @@ class Ui_MainWindow(object):
 
         # connect browse button to browse function
         self.browseButton.clicked.connect(self.browse)
-
-        # connect browse button to browse function
+        # connect download button to download function
         self.downloadButton.clicked.connect(self.start_download)
-
         self.download_thread = QThreadPool()
         
     def start_download(self):
+        if not hasattr(self, 'video_path') or not self.video_path:
+            self.completeLabel.setText("Please select a download location.")
+            return
         self.download_thread.start(self.download)
-
 
     def browse(self):
         self.video_path = QtWidgets.QFileDialog.getExistingDirectory()
 
-
     def download(self):
-        
         try:
             link = self.lineEditLink.text()
-            yt = YouTube(link)
-            if link != "":
-                self.completeLabel.setText("downloading...")
-                yt.streams.get_highest_resolution().download(self.video_path)
-                self.completeLabel.setText("Download completed successfully")
-                time.sleep(3)
-                self.completeLabel.setText("")
-
+            if link == "":
+                self.completeLabel.setText("Please make sure you enter a valid link.")
+                return
+            
+            if "playlist" in link:
+                playlist = Playlist(link)
+                self.completeLabel.setText("Playlist detected. Downloading videos...")
+                for video in playlist.videos:
+                    stream = video.streams.get_highest_resolution()
+                    file_size = stream.filesize / (1024 * 1024)  # Convert bytes to megabytes
+                    self.completeLabel.setText(f"Downloading '{video.title}'... (File size: {file_size:.2f} MB)")
+                    QtWidgets.QApplication.processEvents()  # Update UI
+                    stream.download(self.video_path)
+                self.completeLabel.setText("All videos downloaded successfully")
             else:
-                pass
+                yt = YouTube(link)
+                stream = yt.streams.get_highest_resolution()
+                file_size = stream.filesize / (1024 * 1024)  # Convert bytes to megabytes
+                self.completeLabel.setText(f"Downloading '{yt.title}'... (File size: {file_size:.2f} MB)")
+                QtWidgets.QApplication.processEvents()  # Update UI
+                stream.download(self.video_path)
+                self.completeLabel.setText("Download completed successfully")
+            time.sleep(3)
+            self.completeLabel.setText("")
         except Exception as exc:
-            pass
-
-        link = self.lineEditLink.setText("")
-
+            self.completeLabel.setText(f"Error: {exc}")
+        finally:
+            self.lineEditLink.setText("")
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
